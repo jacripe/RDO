@@ -1,0 +1,17 @@
+127.0.0.1   localhost localhost.localdomain localhost4 localhost4.localdomain4
+::1         localhost localhost.localdomain localhost6 localhost6.localdomain6
+
+# Template
+192.168.124.5       template    tmpl.centos.rdo
+
+# Controller
+192.168.124.10      controller  ctrl.centos.rdo
+
+# Compute
+192.168.124.100     compute     comp.centos.rdo
+
+# Storage
+192.168.124.20      block       blk.centos.rdo
+
+192.168.124.50      object1     obj1.centos.rdo
+192.168.124.51      object2     obj2.centos.rdo

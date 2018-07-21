@@ -1,0 +1,21 @@
+---
+- hosts: compute
+  vars:
+    playbook: compute-setup
+    user: "apollo"
+    home: "/home/apollo"
+    suhome: "/root"
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+  tasks:
+    - name: Backup Directory
+      file:
+        path: "{{ bupdir }}"
+        state: directory
+    - name: Update Passwords
+      user:
+        name: root
+        password: "$6$rounds=656000$JFsCfNSzh4vRZSq9$/kL4gw864X9mldm6Hv/DH.DuL/xDbdJA5Sx.RqeHacUavY6PT7vYRkyhpatX6Wsjog2ynpzEFFxPtNBFY9vyo0"
+    - name: Update Hostname
+      hostname:
+        name: comp.centos.rdo

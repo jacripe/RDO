@@ -1,0 +1,105 @@
+---
+- hosts: all
+  vars:
+    playbook: template-setup
+    user: apollo
+    home: /home/apollo
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+  tasks:
+# Validate Variables
+    - name: Debug User / Home
+      debug:
+        msg: "USER: {{ user }}; HOME: {{ home }}; ANSDIR: {{ ansdir }}; BUPDIR: {{ bupdir }}"
+
+# Backup Files
+    - name: Backup Directory
+      file:
+        path: "{{ bupdir }}"
+        state: directory
+    - name: Backup Files
+      shell: "cp -av {{ files | join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/hosts
+        - /etc/sudoers
+        - /etc/ssh/sshd_config
+        - /etc/chrony.conf
+      args:
+        creates: "{{ bupdir }}/hosts"
+
+# User Config
+    - name: User .ssh Directory
+      file:
+        path: "{{ home }}/.ssh"
+        state: directory
+        mode: 0700
+        owner: "{{ user }}"
+        group: "{{ user }}"
+    - name: SSH Keys
+      copy:
+        dest: "{{ home }}/.ssh/{{ item.dst }}"
+        src: "../Templates/ssh/{{ item.src }}"
+        mode: 0600
+        owner: "{{ user }}"
+        group: "{{ user }}"
+      loop:
+        - { dst: "id_rsa", src: "apollo_rsa" }
+        - { dst: "id_rsa.pub", src: "apollo_rsa.pub" }
+        - { dst: "authorized_keys", src: "authorized_keys" }
+
+# Packages
+    - name: Required Packages
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - bind-utils
+        - nmap
+        - tcpdump
+        - strace
+        - vim
+        - pigz
+        - acpid
+        - chrony
+    - name: Update System
+      yum:
+        name: "*"
+        state: latest
+
+# Service Config
+    - name: Update sshd_config
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^#?\s*{{ item }}\s.*'
+        line: "{{ item }} no"
+      loop:
+        - 'PasswordAuthentication'
+        - 'PermitRootLogin'
+      register: sshd_conf
+    - name: Restart SSHd
+      service:
+        name: sshd
+        state: restarted
+      when: sshd_conf.changed == True
+    - name: Update /etc/sudoers
+      lineinfile:
+        path: /etc/sudoers
+        regexp: '^\s*%wheel\s.*'
+        line: "%wheel ALL=(ALL) NOPASSWD: ALL"
+        validate: '/sbin/visudo -c -f %s'
+    - name: Start/Enable chronyd
+      service:
+        name: chronyd
+        state: started
+        enabled: yes
+
+# Networking
+    - name: Update /etc/hosts
+      copy:
+        src: ../Templates/etc/hosts
+        dest: /etc/hosts
+    - name: Verify Networking
+      script: ../Templates/bin/envping.sh
+

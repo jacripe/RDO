@@ -1,0 +1,46 @@
+---
+- hosts: controller
+  vars:
+    playbook: controller-setup
+    user: "apollo"
+    home: "/home/apollo"
+    suhome: "/root"
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+  tasks:
+# Backup Files
+    - name: Backup Directory
+      file:
+        path: "{{ bupdir }}"
+        state: directory
+    - name: Backup Files
+      shell: "cp -av {{ files | join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/chrony.conf
+      args:
+        creates: "{{ bupdir }}/chrony.conf"
+
+# User Config
+    - name: Update Passwords
+      user:
+        name: root
+        password: "$6$rounds=656000$6E9Tq9lnQHnz.A06$g/7vFnchshxeYY0OdZMeZkLyKewv1O6HaIvpBj52zOtOjq9nXfiTAWgg/L8tg0e2ZZhNj8G7i8WCVigfaFXXm0"
+
+# Networking
+    - name: Update Hostname
+      hostname:
+        name: ctrl.centos.rdo
+
+# Update chrony.conf (ntpd)
+    - name: Update chrony.conf
+      lineinfile:
+        path: /etc/chrony.conf
+        regexp: '^\s*#?\s*allow [0-9]+\..*'
+        line: 'allow 192.168.124.0/24'
+      register: chrony
+    - name: Restart chrony
+      service:
+        name: chronyd
+        state: restarted
+      when: chrony.changed == True
