@@ -155,11 +155,11 @@
     - name:
       lineinfile:
         path: /etc/etcd/etcd.conf
-        regexp: "^{{ item.opt }}=.*"
+        regexp: '^\s*#?\s*{{ item.opt }}=.*'
         line: '{{ item.opt }}="{{ item.val }}"'
       loop:
         - { opt: "ETCD_LISTEN_PEER_URLS", val: "http://{{ ipaddr }}:2380" }
-        - { opt: "ETCD_LISTEN_CLIENT_URLS", val: "http://{{ ipaddr}}:2379" }
+        - { opt: "ETCD_LISTEN_CLIENT_URLS", val: "http://{{ ipaddr}}:2379,http://localhost:2379" }
         - { opt: "ETCD_NAME", val: "controller" } 
         - { opt: "ETCD_INITIAL_ADVERTISE_PEER_URLS", val: "http://{{ ipaddr }}:2380" }
         - { opt: "ETCD_ADVERTISE_CLIENT_URLS", val: "http://{{ ipaddr }}:2379" }
