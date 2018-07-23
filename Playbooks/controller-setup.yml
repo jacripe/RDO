@@ -148,6 +148,18 @@
     - name: Set IP Address
       set_fact:
         ipaddr: "{{ ansible_default_ipv4.address }}"
+    - name: Etcd Conf Dir
+      file:
+        name: "{{ home }}/.ansible/conf/etcd"
+        state: directory
+#    - name: Get Etcd Token
+#      uri:
+#        url: 'https://discovery.etcd.io/new?size=1'
+#        creates: "{{ home }}/.ansible/conf/etcd/token"
+#        dest: "{{ home }}/.ansible/conf/etcd/token"
+#    - name: Set Etcd Token
+#      shell: "cat {{ home }}/.ansible/conf/etcd/token"
+#      register: etcdtoken
     - name: Backup etcd Conf File
       shell: "cp -av /etc/etcd/etcd.conf {{ bupdir }}"
       args:
@@ -166,6 +178,8 @@
         - { opt: "ETCD_INITIAL_CLUSTER", val: "controller=http://{{ ipaddr }}:2380" }
         - { opt: "ETCD_INITIAL_CLUSTER_TOKEN", val: "etcd-cluster-01" }
         - { opt: "ETCD_INITIAL_CLUSTER_STATE", val: "new" }
+        # Not needed
+        # - { opt: "ETCD_DISCOVERY", val: "{{ etcdtoken.stdout }}" }
       register: etcd
     - name: Start Etcd Service
       service:
