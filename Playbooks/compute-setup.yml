@@ -8,14 +8,36 @@
     ansdir: "{{ home }}/.ansible"
     bupdir: "{{ ansdir }}/bak/{{ playbook }}"
   tasks:
+# Backup Files
     - name: Backup Directory
       file:
         path: "{{ bupdir }}"
         state: directory
+    - name: Backup Files
+      shell: "cp -av {{ files | join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/chrony.conf
+      args:
+        creates: "{{ bupdir }}/chrony.conf"
+
+# User Config
     - name: Update Passwords
       user:
         name: root
-        password: "$6$rounds=656000$JFsCfNSzh4vRZSq9$/kL4gw864X9mldm6Hv/DH.DuL/xDbdJA5Sx.RqeHacUavY6PT7vYRkyhpatX6Wsjog2ynpzEFFxPtNBFY9vyo0"
+        password: "$6$rounds=656000$nPHWBkVpu83jqyMe$vqmnOkNZcS.kQTNfhjDA6lWtiRIRodQVj7ky9ARuE0jKeR01.d0dI.FHFbXj4iG3/KjFInf9yhve1CgvKPEJA0"
+
+# System Config
     - name: Update Hostname
       hostname:
         name: comp.centos.rdo
+    - name: Update chrony.conf (ntpd)
+      template:
+        dest: /etc/chrony.conf
+        src: ../Templates/etc/chrony.conf.j2
+      register: chrony
+    - name: Restart chonyd
+      service:
+        name: chronyd
+        state: restarted
+      when: chrony.changed == True

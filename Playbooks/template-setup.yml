@@ -55,18 +55,21 @@
         state: latest
       vars:
         packages:
-        - bind-utils
+        # Network
         - nmap
         - tcpdump
-        - strace
-        - vim
+        - net-tools
+        - bind-utils
+        # System
         - pigz
         - acpid
         - chrony
-    - name: Update System
-      yum:
-        name: "*"
-        state: latest
+        - strace
+        - yum-utils
+        - bash-completion
+        - yum-plugin-versionlock
+        # Misc
+        - vim
 
 # Service Config
     - name: Update sshd_config
@@ -103,3 +106,19 @@
     - name: Verify Networking
       script: ../Templates/bin/envping.sh
 
+# OpenStack Packages
+    - name: RDO Queens (OSP13) Repository Package
+      yum:
+        name: centos-release-openstack-queens
+        state: latest
+    - name: OpenStack Packages
+      yum:
+        name: "{{ packages }}"
+      vars:
+        packages:
+        - python-openstackclient
+        - openstack-selinux
+    - name: Update System
+      yum:
+        name: "*"
+        state: latest

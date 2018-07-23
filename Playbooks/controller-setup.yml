@@ -31,8 +31,54 @@
     - name: Update Hostname
       hostname:
         name: ctrl.centos.rdo
+    - name: Firewall Services
+      firewalld:
+        service: "{{ item }}"
+        state: enabled
+        immediate: True
+        permanent: True
+      loop:
+        - ntp
+        - mysql
+    - name: Firewall Ports
+      firewalld:
+        port: "{{ item }}/tcp"
+        state: enabled
+        immediate: True
+        permanent: True
+      loop:
+        - 4369
+        - 5671-5672
+        - 25672
 
-# Update chrony.conf (ntpd)
+# Service Install/Config
+    - name: Install Services
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        # SQL
+        - mariadb
+        - mariadb-server
+        - python2-PyMySQL
+        # Message Queue
+        - rabbitmq-server
+
+    - name: MariaDB config
+      template:
+        src: ../Templates/etc/my.cnf.d/openstack.cnf.j2
+        dest: /etc/my.cnf.d/openstack.cnf
+    - name: MariaDB Service
+      service:
+        name: mariadb
+        state: restarted
+        enabled: True
+# Still working this one out...
+#    - name: MySQL Secure Installation
+#      shell: "mysql_secure_installation"
+
+    # NTP
     - name: Update chrony.conf
       lineinfile:
         path: /etc/chrony.conf
@@ -44,3 +90,20 @@
         name: chronyd
         state: restarted
       when: chrony.changed == True
+
+    # Message Queue
+    - name: RabbitMQ Service
+      service:
+        name: rabbitmq-server
+        state: started
+        enabled: True
+    - name: RabbitMQ User
+      rabbitmq_user:
+        user: openstack
+        password: openstack
+        permissions:
+          - vhost: /
+            configure_priv: .*
+            write_priv: .*
+            read_priv: .*
+        state: present
