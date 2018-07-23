@@ -40,16 +40,30 @@
       loop:
         - ntp
         - mysql
-    - name: Firewall Ports
+    - name: Firewall TCP Ports
       firewalld:
         port: "{{ item }}/tcp"
         state: enabled
         immediate: True
         permanent: True
       loop:
+        # RabbitMQ
         - 4369
         - 5671-5672
         - 25672
+        # MemCacheD
+        - 11211
+        # Etcd
+        - 2379-2380
+    - name: Firewall UDP Ports
+      firewalld:
+        port: "{{ item }}/udp"
+        state: enabled
+        immediate: True
+        permanent: True
+      loop:
+        # MemCacheD
+        - 11211
 
 # Service Install/Config
     - name: Install Services
@@ -64,7 +78,13 @@
         - python2-PyMySQL
         # Message Queue
         - rabbitmq-server
+        # Cache
+        - memcached
+        - python-memcached
+        # Misc
+        - etcd
 
+    # SQL
     - name: MariaDB config
       template:
         src: ../Templates/etc/my.cnf.d/openstack.cnf.j2
@@ -107,3 +127,49 @@
             write_priv: .*
             read_priv: .*
         state: present
+
+    # Cache
+    - name: Backup memcached Conf File
+      shell: "cp -av /etc/sysconfig/memcached {{ bupdir }}"
+      args:
+        creates: "{{ bupdir }}/memcached"
+    - name: Configure MemCacheD
+      lineinfile:
+        path: /etc/sysconfig/memcached
+        regexp: '^OPTIONS=.*'
+        line: 'OPTIONS=""'
+    - name: Restart MemCacheD
+      service:
+        name: memcached
+        state: restarted
+        enabled: True
+
+    # Etcd
+    - name: Set IP Address
+      set_fact:
+        ipaddr: "{{ ansible_default_ipv4.address }}"
+    - name: Backup etcd Conf File
+      shell: "cp -av /etc/etcd/etcd.conf {{ bupdir }}"
+      args:
+        creates: "{{ bupdir }}/etcd.conf"
+    - name:
+      lineinfile:
+        path: /etc/etcd/etcd.conf
+        regexp: "^{{ item.opt }}=.*"
+        line: '{{ item.opt }}="{{ item.val }}"'
+      loop:
+        - { opt: "ETCD_LISTEN_PEER_URLS", val: "http://{{ ipaddr }}:2380" }
+        - { opt: "ETCD_LISTEN_CLIENT_URLS", val: "http://{{ ipaddr}}:2379" }
+        - { opt: "ETCD_NAME", val: "controller" } 
+        - { opt: "ETCD_INITIAL_ADVERTISE_PEER_URLS", val: "http://{{ ipaddr }}:2380" }
+        - { opt: "ETCD_ADVERTISE_CLIENT_URLS", val: "http://{{ ipaddr }}:2379" }
+        - { opt: "ETCD_INITIAL_CLUSTER", val: "controller=http://{{ ipaddr }}:2380" }
+        - { opt: "ETCD_INITIAL_CLUSTER_TOKEN", val: "etcd-cluster-01" }
+        - { opt: "ETCD_INITIAL_CLUSTER_STATE", val: "new" }
+      register: etcd
+    - name: Start Etcd Service
+      service:
+        name: etcd
+        state: restarted
+        enabled: True
+      when: etcd.changed == True 
