@@ -110,6 +110,6 @@
         - "/bin/keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone"
         - "/bin/keystone-manage credential_setup --keystone-user keystone --keystone-group keystone"
         - "/bin/keystone-manage bootstrap --bootstrap-password openstack --bootstrap-admin-url http://{{ ansible_fqdn }}:5000/v3/ --bootstrap-internal-url http://{{ ansible_fqdn }}:5000/v3/ --bootstrap-public-url http://{{ ansible_fqdn }}:5000/v3/ --bootstrap-region-id RegionOne"
-        - "touch {{ ansdir }}/progress/keystone"
+        - "touch {{ ansdir }}/progress/{{ playbook }}"
       args:
         creates: "{{ ansdir }}/progress/keystone"

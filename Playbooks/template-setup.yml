@@ -130,6 +130,6 @@
 
 # Touch Progress File
     - name: Progress File
-      shell: "touch {{ ansdir }}/progress/template"
+      shell: "touch {{ ansdir }}/progress/{{ playbook }}"
       args:
         creates: "{{ ansdir }}/progress/template"

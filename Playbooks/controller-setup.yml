@@ -237,5 +237,5 @@
 # Update Progress
     - name: Progress File
       file:
-        path: "{{ ansdir }}/progress/controller"
+        path: "{{ ansdir }}/progress/{{ playbook }}"
         state: touch
