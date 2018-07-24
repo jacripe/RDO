@@ -65,6 +65,7 @@
         - acpid
         - chrony
         - strace
+        - mlocate
         - yum-utils
         - bash-completion
         - yum-plugin-versionlock

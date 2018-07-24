@@ -76,13 +76,19 @@
         - mariadb
         - mariadb-server
         - python2-PyMySQL
+        - MySQL-python
         # Message Queue
+        - erlang
         - rabbitmq-server
         # Cache
         - memcached
         - python-memcached
         # Misc
         - etcd
+    - name: Version Lock Packages
+      shell: "yum versionlock {{ item }}"
+      loop:
+        - erlang*
 
     # SQL
     - name: MariaDB config
@@ -97,6 +103,23 @@
 # Still working this one out...
 #    - name: MySQL Secure Installation
 #      shell: "mysql_secure_installation"
+    - name: Remove MySQL Default User
+      mysql_user:
+        name: ""
+        host_all: yes
+        state: absent
+    - name: Set MySQL root User Password
+      mysql_user:
+        name: 'root'
+        host_all: yes
+        password: controller
+    - name: Upload .my.cnf
+      template:
+        src: ../Templates/etc/.my.cnf.j2
+        dest: "{{ item }}/.my.cnf"
+      loop:
+        - "{{ home }}"
+        - "{{ ansible_env.HOME }}"
 
     # NTP
     - name: Update chrony.conf
@@ -112,6 +135,27 @@
       when: chrony.changed == True
 
     # Message Queue
+    - name: Erlang User
+      user:
+        name: epmd
+        system: yes
+#    TESTING
+#    https://bugzilla.redhat.com/show_bug.cgi?id=1104843
+#    - name: Backup Files
+#      shell: "cp -av {{ files | join(' ') }} {{ bupdir }}"
+#      files:
+#        - /usr/lib/systemd/system/epmd.socket
+#        - /usr/lib/systemd/system/epmd@.socket
+#      args:
+#        creates: "{{ bupdir }}/epmd.socket"
+#    - name: Update epmd.socket files
+#      lineinfile:
+#        path: "{{ item.path }}"
+#        regexp: "{{ item.regexp }}"
+#        line: "{{ item.line }}"
+#      loop:
+#        - { path: /usr/lib/systemd/system/epmd.socket,  regexp: "ListenStream=.*", line: "ListenStream=0.0.0.0:4369" }
+#        - { path: /usr/lib/systemd/system/epmd@.socket
     - name: RabbitMQ Service
       service:
         name: rabbitmq-server
@@ -138,11 +182,13 @@
         path: /etc/sysconfig/memcached
         regexp: '^OPTIONS=.*'
         line: 'OPTIONS=""'
+      register: memcached
     - name: Restart MemCacheD
       service:
         name: memcached
         state: restarted
         enabled: True
+      when: memcached.changed == True
 
     # Etcd
     - name: Set IP Address

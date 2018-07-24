@@ -1,0 +1,64 @@
+---
+- hosts: controller
+  vars:
+    playbook: keystone-setup 
+    home: /home/apollo
+    user: apollo
+    suhome: /root
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+  tasks:
+# Prep
+    - name: Prep Backup Dir
+      file:
+        path: "{{ bupdir }}/{{ playbook }}"
+        state: directory
+
+# Database
+    - name: Keystone DB
+      mysql_db:
+        name: keystone
+    - name: Keystone DB User
+      mysql_user:
+        name: keystone
+        password: keystone
+        priv: keystone.*:ALL
+        host: "{{ item }}"
+      loop:
+        - localhost
+        - '192.168.124.%'
+
+# Packages
+    - name: Install Packages
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - httpd
+        - mod_wsgi
+        - openstack-keystone
+
+# Service Config
+    - name: Backup Files
+      shell: "cp -av {{ files | join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/keystone/keystone.conf
+      args:
+        creates: "{{ bupdir }}/keystone.conf"
+    - name: Update keystone.conf
+      lineinfile:
+        path: /etc/keystone/keystone.conf
+        regexp: '^#?\s*{{ item.term }}\s*=.*'
+        line: "{{ item.line }}"
+      loop:
+        - { term: "connection", line: "connection = mysql+pymysql://keystone:keystone@controller/keystone" }
+        - { term: "provider", line: "provider = fernet" }
+    - name: Initialize Keystone
+      shell: "{{ item }}"
+      loop:
+        - "su -s /bin/sh -c 'keystone-manage db_sync' keystone"
+        - "/bin/keystone-manage fernet_setup --keystone-user keystone --keystone-group keystone"
+        - "/bin/keystone-manage credential_setup --keystone-user keystone --keystone-group keystone"
+        - "/bin/keystone-manage bootstrap --bootstrap-password keystone --bootstrap-admin-url http://{{ ansible_fqdn }}:5000/v3/ --bootstrap-internal-url http://{{ ansible_fqdn }}:5000/v3/ --bootstrap-public-url http://{{ ansible_fqdn }}:5000/v3/ --bootstrap-region-id RegionOne"
