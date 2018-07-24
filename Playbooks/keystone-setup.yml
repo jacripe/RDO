@@ -43,7 +43,43 @@
         - mod_wsgi
         - openstack-keystone
 
+# Networking 
+    - name: Update Firewall Services
+      firewalld:
+        service: "{{ item }}"
+        state: enabled
+        immediate: True
+        permanent: True
+      loop:
+        - http
+
+# Misc.
+    - name: System Variables
+      copy:
+        src: ../Templates/etc/.keystone.j2
+        dest: "{{ item }}/.keystone"
+      loop:
+        - "{{ home }}"
+        - "{{ suhome }}" 
+
 # Service Config
+    # Apache
+    - name: Upload httpd Conf File
+      template:
+        src: ../Templates/etc/httpd.conf.j2
+        dest: /etc/httpd/conf.d/00-openstack.conf
+      register: httpd
+    - name: Link wsgi-keystone.conf
+      file:
+        dest: /etc/httpd/conf.d/wsgi-keystone.conf
+        src: /usr/share/keystone/wsgi-keystone.conf
+        state: link
+    - name: Restart Apache
+      service:
+        name: httpd
+        state: restarted
+        enabled: True
+      when: httpd.changed == True
     - name: Backup Files
       shell: "cp -av {{ files | join(' ') }} {{ bupdir }}"
       vars:
@@ -52,6 +88,7 @@
         - /etc/httpd/conf/httpd.conf
       args:
         creates: "{{ bupdir }}/keystone.conf"
+
     # Keystone
     - name: Update keystone.conf
       lineinfile:
@@ -71,40 +108,3 @@
         - "touch {{ ansdir }}/progress/keystone"
       args:
         creates: "{{ ansdir }}/progress/keystone"
-
-    # Apache
-    - name: Upload httpd Conf File
-      template:
-        src: ../Templates/etc/httpd.conf.j2
-        dest: /etc/httpd/conf.d/00-openstack.conf
-      register: httpd
-    - name: Link wsgi-keystone.conf
-      file:
-        dest: /etc/httpd/conf.d/wsgi-keystone.conf
-        src: /usr/share/keystone/wsgi-keystone.conf
-        state: link
-    - name: Restart Apache
-      service:
-        name: httpd
-        state: restarted
-        enabled: True
-      when: httpd.changed == True
-
-# Networking 
-    - name: Update Firewall Services
-      firewalld:
-        service: "{{ item }}"
-        state: enabled
-        immediate: True
-        permanent: True
-      loop:
-        - http
-
-# Misc.
-    - name: System Variables
-      copy:
-        src: ../Templates/etc/.keystone.j2
-        dest: "{{ item }}"
-      loop:
-        - "{{ home }}"
-        - "{{ suhome }}" 

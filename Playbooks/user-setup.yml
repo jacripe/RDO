@@ -1,0 +1,77 @@
+---
+- hosts: controller
+  vars:
+    playbook: user-setup
+    user: apollo
+    home: /home/apollo
+    suhome: /root
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+  tasks:
+
+# Prep
+    - name: Backup Directory
+      file:
+        path: "{{ bupdir }}"
+        state: directory
+    - name: Progress Directory
+      file:
+        path: "{{ ansdir }}/progress"
+        state: directory
+
+# Domain
+    - name: OpenStack Domain/Project/User
+      shell: "{{ item }}"
+      loop:
+        - 'source {{ home }}/.keystone; /bin/openstack domain create --description "Example Domain" example'
+        - 'source {{ home }}/.keystone; /bin/openstack project create --domain default --description "Service Project" service'
+        - 'source {{ home }}/.keystone; /bin/openstack project create --domain default --description "Demo Project" demo'
+        - 'source {{ home }}/.keystone; /bin/openstack user create --domain default --password "demo" demo'
+        - 'source {{ home }}/.keystone; /bin/openstack role create user'
+        - 'source {{ home }}/.keystone; /bin/openstack role add --project demo --user demo user'
+        - 'touch {{ ansdir }}/progress/{{ playbook }}'
+      args:
+        creates: "{{ ansdir }}/progress/{{ playbook }}"
+
+#    - name: Admin Token
+#      shell: "/bin/openstack {{ args | join(' ') }}"
+#      vars:
+#        args:
+#        - "--os-auth-url http://{{ ansible_fqdn }}:35357/v3"
+#        - "--os-project-domain-name Default"
+#        - "--os-user-domain-name Default"
+#        - "--os-project-name admin"
+#        - "--os-username admin"
+#        - "--os-password openstack"
+#        - "token issue"
+#      register: admintkn
+#    - name: Demo Token 
+#      shell: "/bin/openstack {{ args | join(' ') }}"
+#      vars:
+#        args:
+#        - "--os-auth-url http://{{ ansible_fqdn }}:35357/v3"
+#        - "--os-project-domain-name Default"
+#        - "--os-user-domain-name Default"
+#        - "--os-project-name demo"
+#        - "--os-username demo"
+#        - "--os-password demo"
+#        - "token issue"
+#      register: demotkn
+    - name: Admin Token
+      shell: "source {{ home }}/.keystone; openstack token issue"
+      register: admintkn
+    - name: Demo Token
+      shell: "{{ cmds | join('; ') }}"
+      vars:
+        cmds:
+        - "source {{ home }}/.keystone"
+        - 'export OS_USERNAME="demo"'
+        - 'export OS_PASSWORD="demo"'
+        - 'export OS_PROJECT_NAME="demo"'
+        - "openstack token issue"
+      register: demotkn
+    - name: Verify Tokens
+      debug: "{{ item.stdout }}"
+      loop:
+        - "{{ admintkn }}"
+        - "{{ demotkn }}"
