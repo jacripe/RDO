@@ -54,11 +54,16 @@
         - http
 
 # Misc.
-    - name: System Variables
+    - name: Upload OpenRC Files
       copy:
-        src: ../Templates/etc/.keystone.j2
-        dest: "{{ item }}/.keystone"
-      loop:
+        src: ../Templates/etc/{{ item.0 }}
+        dest: "{{ item.1 }}/{{ item.0 }}"
+      loop: "{{ files|product(dirs)|list }}"
+      vars:
+        files:
+        - ".openrc.admin"
+        - ".openrc.demo"
+        dirs:
         - "{{ home }}"
         - "{{ suhome }}" 
 

@@ -58,17 +58,10 @@
 #        - "token issue"
 #      register: demotkn
     - name: Admin Token
-      shell: "source {{ home }}/.keystone; openstack token issue"
+      shell: "source {{ home }}/.openrc.admin; openstack token issue"
       register: admintkn
     - name: Demo Token
-      shell: "{{ cmds | join('; ') }}"
-      vars:
-        cmds:
-        - "source {{ home }}/.keystone"
-        - 'export OS_USERNAME="demo"'
-        - 'export OS_PASSWORD="demo"'
-        - 'export OS_PROJECT_NAME="demo"'
-        - "openstack token issue"
+      shell: "source {{ home }}/.openrc.demo; openstack token issue"
       register: demotkn
     - name: Verify Tokens
       debug: "{{ item.stdout }}"
