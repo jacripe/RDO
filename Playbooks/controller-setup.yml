@@ -233,3 +233,9 @@
         state: restarted
         enabled: True
       when: etcd.changed == True 
+
+# Update Progress
+    - name: Progress File
+      file:
+        path: "{{ ansdir }}/progress/controller"
+        state: touch

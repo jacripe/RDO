@@ -12,7 +12,11 @@
       debug:
         msg: "USER: {{ user }}; HOME: {{ home }}; ANSDIR: {{ ansdir }}; BUPDIR: {{ bupdir }}"
 
-# Backup Files
+# Prep
+    - name: Progress Directory
+      file:
+        path: "{{ ansdir }}/progress"
+        state: directory
     - name: Backup Directory
       file:
         path: "{{ bupdir }}"
@@ -123,3 +127,9 @@
       yum:
         name: "*"
         state: latest
+
+# Touch Progress File
+    - name: Progress File
+      shell: "touch {{ ansdir }}/progress/template"
+      args:
+        creates: "{{ ansdir }}/progress/template"
