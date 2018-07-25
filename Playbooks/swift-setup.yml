@@ -1,0 +1,136 @@
+---
+- hosts: object
+  vars:
+    playbook: swift-setup
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: "/root"
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+
+  tasks:
+# Prep
+    - name: Ansible Directories
+      file:
+        name: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ bupdir }}"
+        - "{{ ansdir }}/progress"
+    - name: Backup Files
+      shell: "cp -av {{ files | join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/hosts
+        - /etc/sysconfig/network
+      args:
+        creates: "{{ bupdir }}/hosts"
+#    Moved to template-setup
+#    - name: Set Hostname
+#      hostname:
+#        name: "{{ fqdn }}"
+    - name: Set root Password
+      user:
+        name: root
+        password: '$6$rounds=656000$mk0s9/5d0BQAQ4f6$KM/uo3ZWBOKDMDA.BO0IqK/QbrYA1uFECJgCILPi1hQx80Yl.CVqdfe.ieP1lKksaMRqJ2CYAdO5w99m.rw/t.'
+
+# Network Config
+    - name: Update Firewall Services
+      firewalld:
+        service: "{{ item }}"
+        state: enabled
+        immediate: True
+        permanent: True
+      loop:
+        - rsyncd
+    - name: Update Firewall Ports
+      firewalld:
+        port: "{{ item }}"
+        state: enabled
+        immediate: True
+        permanent: True
+      loop:
+        - '6200-6202/tcp'
+        - '6200-6202/udp'
+
+# Install Packages
+    - name: Install Packages
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - xfsprogs
+        - rsync
+
+# Disk Config
+    - name: Format Data Disks
+      filesystem:
+        dev: "/dev/{{ item }}"
+        fstype: xfs
+      #  resizefs: yes    
+      loop:
+        - vdb
+        - vdc
+    - name: Mount Data Disks
+      mount:
+        path: "/srv/node/{{ item }}"
+        src: "/dev/{{ item }}"
+        opts: "noatime,nodiratime,nobarrier,logbufs=8"
+        state: mounted
+        fstype: xfs
+      loop:
+        - vdb
+        - vdc
+
+# Service Installation
+    - name: Install Services
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - openstack-swift-object
+        - openstack-swift-account
+        - openstack-swift-container
+
+# Service Config
+    - name: Rsync Configuration
+      template:
+        src: ../Templates/etc/rsyncd.conf.j2
+        dest: /etc/rsyncd.conf
+      register: rsync
+    - name: Restart Rsync
+      service:
+        name: rsyncd
+        state: restarted
+        enabled: True
+      when: rsync.changed == True
+    - name: Swift Config
+      template:
+        src: "../Templates/etc/{{ item }}.j2"
+        dest: "/etc/swift/{{ item }}"
+        owner: root
+        group: swift
+      loop:
+        - "account-server.conf"
+        - "container-server.conf"
+        - "object-server.conf"
+
+# Directory Config
+    - name: Swift Directory Ownership
+      file:
+        path: "{{ item }}"
+        owner: swift
+        group: swift
+        recurse: yes
+      loop:
+        - /srv/node
+        - /var/cache/swift
+    - name: Swift Cache Mode
+      file:
+        path: /var/cache/swift
+        mode: 0775
+        recurse: yes

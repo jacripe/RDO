@@ -1,0 +1,146 @@
+---
+- hosts: controller
+  vars:
+    playbook: swift-rings
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: "/root"
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
+  tasks:
+
+# Prep
+    - name: Ansible Directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ bupdir }}"
+        - "{{ progdir }}"
+
+# Networking
+    - name: Update Firewall Ports
+      firewalld:
+        port: "{{ item }}"
+        state: enabled
+        immediate: True
+        permanent: True
+      loop:
+        - '6200-6202/tcp'
+        - '6200-6202/udp'
+
+# Swift Account Ring
+    - name: Create account.builder File
+      shell: "cd /etc/swift; /bin/swift-ring-builder account.builder create 10 2 1"
+      args:
+        creates: "/etc/swift/account.builder"
+    - name: Add Nodes to Account Ring
+      shell: "cd /etc/swift; /bin/swift-ring-builder account.builder add --region 1 --zone 1 --ip {{ item.0 }} --port 6202 --device {{ item.1 }} --weight 100"
+      loop:
+        "{{ ipaddrs|product(devs)|list }}"
+      vars:
+        ipaddrs:
+        - 192.168.124.50
+        - 192.168.124.51
+        devs:
+        - vdb
+        - vdc
+      args:
+        creates: "{{ progfile }}.account"
+    - name: Touch Account Progress File
+      shell: "touch {{ progfile }}.account"
+      args:
+        creates: "{{ progfile }}.account"
+    - name: Verify & Rebalance Ring
+      shell: "cd /etc/swift; {{ item }}"
+      loop:
+        - '/bin/swift-ring-builder account.builder'
+        - '/bin/swift-ring-builder account.builder rebalance'
+      ignore_errors: yes
+
+# Swift Container Ring
+    - name: Create container.builder File
+      shell: "cd /etc/swift; /bin/swift-ring-builder container.builder create 10 2 1"
+      args:
+        creates: "/etc/swift/container.builder"
+    - name: Add Nodes to Container Ring
+      shell: "cd /etc/swift; /bin/swift-ring-builder container.builder add --region 1 --zone 1 --ip {{ item.0 }} --port 6201 --device {{ item.1 }} --weight 100"
+      loop:
+        "{{ ipaddrs|product(devs)|list }}"
+      vars:
+        ipaddrs:
+        - 192.168.124.50
+        - 192.168.124.51
+        devs:
+        - vdb
+        - vdc
+      args:
+        creates: "{{ progfile }}.container"
+    - name: Touch Container Progress File
+      shell: "touch {{ progfile }}.container"
+      args:
+        creates: "{{ progfile }}.container"
+    - name: Verify & Rebalance Ring
+      shell: "cd /etc/swift; {{ item }}"
+      loop:
+        - '/bin/swift-ring-builder container.builder'
+        - '/bin/swift-ring-builder container.builder rebalance'
+      ignore_errors: yes
+
+# Swift Object Ring
+    - name: Create object.builder File
+      shell: "cd /etc/swift; /bin/swift-ring-builder object.builder create 10 2 1"
+      args:
+        creates: "/etc/swift/object.builder"
+    - name: Add Nodes to Object Ring
+      shell: "cd /etc/swift; /bin/swift-ring-builder object.builder add --region 1 --zone 1 --ip {{ item.0 }} --port 6200 --device {{ item.1 }} --weight 100"
+      loop:
+        "{{ ipaddrs|product(devs)|list }}"
+      vars:
+        ipaddrs:
+        - 192.168.124.50
+        - 192.168.124.51
+        devs:
+        - vdb
+        - vdc
+      args:
+        creates: "{{ progfile }}.object"
+    - name: Touch Object Progress File
+      shell: "touch {{ progfile }}.object"
+      args:
+        creates: "{{ progfile }}.object"
+    - name: Verify & Rebalance Ring
+      shell: "cd /etc/swift; {{ item }}"
+      loop:
+        - '/bin/swift-ring-builder object.builder'
+        - '/bin/swift-ring-builder object.builder rebalance'
+      ignore_errors: yes
+
+# Distribute Ring Files
+    - name: Download .ring.gz files
+      fetch:
+        src: "/etc/swift/{{ item }}"
+        dest: "../Templates/etc/{{ item }}"
+        flat: yes
+      loop:
+        - account.ring.gz
+        - container.ring.gz
+        - object.ring.gz
+    - name: Upload to Object Nodes
+      copy:
+        src: "../Templates/etc/{{ item.0 }}"
+        dest: "/etc/swift/"
+      delegate_to: "{{ item.1 }}"
+      loop: "{{ files|product(nodes)|list }}"
+      vars:
+        files:
+        - account.ring.gz
+        - container.ring.gz
+        - object.ring.gz
+        nodes:
+        - obj1.centos.rdo
+        - obj2.centos.rdo

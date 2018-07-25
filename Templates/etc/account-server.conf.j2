@@ -1,0 +1,32 @@
+# Templated out from
+# https://docs.openstack.org/swift/queens/install/storage-install-rdo.html
+[DEFAULT]
+bind_ip = 0.0.0.0
+bind_port = 6202
+user = swift
+swift-dir = /etc/swift
+devices = /srv/node
+mount_check = True
+log_requests = True
+
+[pipeline:main]
+pipeline = healthcheck recon account-server
+
+[app:account-server]
+use = egg:swift#account
+
+[filter:healthcheck]
+use = egg:swift#healthcheck
+
+[filter:recon]
+use = egg:swift#recon
+recon_cache_path = /var/cache/swift
+
+[account-replicator]
+
+[account-auditor]
+
+[account-reaper]
+
+[filter:xprofile]
+use = egg:swift#xprofile

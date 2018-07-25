@@ -1,0 +1,64 @@
+---
+- hosts: controller
+  vars:
+    playbook: swift-controller
+    fqdn: "{{ ansible_fqdn }}"
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: /root
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+  tasks:
+
+# Prep
+    - name: Ansible Directories
+      file:
+        name: "{{ item }}"
+        state: directory
+      loop:
+        - bupdir
+        - "{{ ansdir }}/progress"
+
+# Networking
+    - name: Update Firewall Ports
+      firewalld:
+        port: "{{ item }}"
+        state: enabled
+        immediate: True
+        permanent: True
+      loop:
+        - '8080/tcp'
+        - '8080/udp'
+
+# OpenStack Config
+    - name: OpenStack Config
+      shell: "source {{ home }}/.openrc.admin; {{ item }}"
+      loop:
+        - "/bin/openstack user create --domain default --password swift swift"
+        - "/bin/openstack role add --project service --user swift admin"
+        - '/bin/openstack service create --name swift --description "OpenStack Object Storage" object-store'
+        - '/bin/openstack endpoint create --region RegionOne object-store public http://{{ fqdn }}:8080/v1/AUTH_%\(project_id\)s'
+        - '/bin/openstack endpoint create --region RegionOne object-store internal http://{{ fqdn }}:8080/v1/AUTH_%\(project_id\)s'
+        - '/bin/openstack endpoint create --region RegionOne object-store admin http://{{ fqdn }}:8080/v1'
+        - 'touch {{ ansdir }}/progress/{{ playbook }}'
+      args:
+        creates: "{{ ansdir }}/progress/{{ playbook }}"
+
+# Install Packages
+    - name: Install Packages
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - openstack-swift-proxy
+        - python-swiftclient
+        - python-keystoneclient
+        - python-keystonemiddleware
+        - memcached
+
+# Service Config
+    - name: Configure Swift Proxy Server
+      template:
+        src: ../Templates/etc/swift-proxy.conf.j2
+        dest: /etc/swift/proxy-server.conf

@@ -104,6 +104,9 @@
         enabled: yes
 
 # Networking
+    - name: Update hostname
+      hostname:
+        name: "{{ inventory_hostname }}"
     - name: Update /etc/hosts
       copy:
         src: ../Templates/etc/hosts

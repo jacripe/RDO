@@ -1,0 +1,78 @@
+---
+- hosts: controller,object
+  vars:
+    playbook: swift-final
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: "/root"
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
+  tasks:
+
+# Swift Config
+    - name: Upload Swift Config
+      template:
+        src: ../Templates/etc/swift.conf.j2
+        dest: /etc/swift/swift.conf
+      register: swift
+    - name: Update Swift File Permissions
+      file:
+        path: /etc/swift
+        owner: root
+        group: swift
+        recurse: yes
+    - name: Validate SELinux Contexts
+      shell: "restorecon -R /srv"
+
+# Service Start
+    - name: Start Proxy Service
+      service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: yes
+      loop:
+        - openstack-swift-proxy
+        - memcached
+      when: fqdn == "ctrl.centos.rdo" and swift.changed == True
+    - name: Start Storage Services
+      service:
+        name: "openstack-swift-{{ item }}"
+        state: restarted
+        enabled: yes
+      loop:
+        - account
+        - account-auditor
+        - account-reaper
+        - account-replicator
+        - container
+        - container-auditor
+        - container-replicator
+        - container-updater
+        - object
+        - object-auditor
+        - object-replicator
+        - object-updater
+      when: (fqdn == "obj1.centos.rdo" or fqdn == "obj2.centos.rdo") and swift.changed == True
+
+# Verify Services
+    - name: Stage Test File
+      template:
+        src: ../Templates/swift-test.txt
+        dest: "{{ ansdir }}/swift-test.txt"
+      when: fqdn == "ctrl.centos.rdo"
+    - name: Verify Services
+      shell: "source {{ home }}/.openrc.demo; {{ item }}"
+      loop:
+        - '/bin/swift stat'
+        - '/bin/openstack container create container1'
+        - '/bin/openstack object create --name swift-test.txt container1 {{ ansdir }}/swift-test.txt'
+        - '/bin/openstack object list container1'
+        - '/bin/openstack object save container1 swift-test.txt'
+        - 'touch {{ progfile }}'
+      args:
+        creates: "{{ progfile }}"
+      when: fqdn == "ctrl.centos.rdo"

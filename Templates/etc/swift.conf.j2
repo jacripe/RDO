@@ -1,0 +1,12 @@
+# Templated out from
+# https://docs.openstack.org/swift/queens/install/finalize-installation-rdo.html
+[swift-hash]
+swift_hash_path_suffix = centos
+swift_hash_path_prefix = rdo
+
+[storage-policy:0]
+name = Policy-0
+default = yes
+aliases = yellow, orange
+
+[swift-constraints]

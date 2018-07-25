@@ -28,9 +28,10 @@
         password: "$6$rounds=656000$6E9Tq9lnQHnz.A06$g/7vFnchshxeYY0OdZMeZkLyKewv1O6HaIvpBj52zOtOjq9nXfiTAWgg/L8tg0e2ZZhNj8G7i8WCVigfaFXXm0"
 
 # Networking
-    - name: Update Hostname
-      hostname:
-        name: ctrl.centos.rdo
+#    Moved to template-setup
+#    - name: Update Hostname
+#      hostname:
+#        name: ctrl.centos.rdo
     - name: Firewall Services
       firewalld:
         service: "{{ item }}"
@@ -85,10 +86,14 @@
         - python-memcached
         # Misc
         - etcd
+    - name: Check yum versionlock
+      shell: "grep erlang /etc/yum/pluginconf.d/versionlock.list"
+      register: verslock
     - name: Version Lock Packages
       shell: "yum versionlock {{ item }}"
       loop:
         - erlang*
+      when: verslock.rc != 0
 
     # SQL
     - name: MariaDB config
