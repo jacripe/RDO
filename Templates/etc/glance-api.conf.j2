@@ -1,0 +1,72 @@
+# Templated out from
+# https://docs.openstack.org/glance/queens/install/install-rdo.html
+# https://docs.openstack.org/glance/queens/configuration/glance_api.html
+#https://access.redhat.com/documentation/en-US/Red_Hat_Enterprise_Linux_OpenStack_Platform/3/html/Installation_and_Configuration_Guide/Using_the_Object_Storage_Service_for_Image_Storage.html
+[DEFAULT]
+
+[cors]
+
+[database]
+connection = mysql+pymysql://glance:glance@{{ fqdn }}/glance
+
+[glance_store]
+stores = file,http,swift
+default_store = swift
+filesystem_store_datadir = /var/lib/glance/images
+swift_store_auth_address = http://{{ fqdn }}:5000/v3/
+swift_store_create_container_on_put = True
+swift_store_user = service:glance
+swift_store_key = glance 
+swift_store_auth_insecure = True
+swift_store_config_file = /etc/glance/glance-swift.conf
+default_swift_reference = glance
+#swift_store_region = RegionOne
+#swift_store_endpoint = http://{{ fqdn }}:8080/v1/
+#swift_store_endpoint_type = adminURL
+#swift_store_service_type = object-store
+#swift_store_container = glance
+#swift_store_auth_version = 2
+
+[image_format]
+
+[keystone_authtoken]
+auth_uri = http://{{ fqdn }}:5000
+auth_url = http://{{ fqdn }}:5000
+www_authenticate_uri = http://{{ fqdn }}:5000
+memcached_servers = {{ fqdn }}:11211
+auth_type = password
+project_domain_name = Default
+user_domain_name = Default
+project_name = service
+username = glance
+password = glance
+service_token_roles_required = True
+
+[matchmaker_redis]
+
+[oslo_concurrency]
+
+[oslo_messaging_amqp]
+
+[oslo_messaging_kafka]
+
+[oslo_messaging_notifications]
+
+[oslo_messaging_rabbit]
+
+[oslo_messaging_zmq]
+
+[oslo_middleware]
+
+[oslo_policy]
+
+[paste_deploy]
+flavor = keystone
+
+[profiler]
+
+[store_type_location_strategy]
+
+[task]
+
+[taskflow_executor]

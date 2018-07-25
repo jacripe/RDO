@@ -1,0 +1,36 @@
+# Templated out from
+# https://docs.openstack.org/glance/queens/install/install-rdo.html
+[DEFAULT]
+
+[database]
+connection = mysql+pymysql://glance:glance@{{ fqdn }}/glance
+
+[keystone_authtoken]
+auth_uri = http://{{ fqdn }}:5000
+auth_url = http://{{ fqdn }}:5000
+memcached_servers = {{ fqdn }}:11211
+auth_type = password
+project_domain_name = Default
+user_domain_name = Default
+project_name = service
+username = glance
+password = glance
+
+[matchmaker_redis]
+
+[oslo_messaging_amqp]
+
+[oslo_messaging_kafka]
+
+[oslo_messaging_notifications]
+
+[oslo_messaging_rabbit]
+
+[oslo_messaging_zmq]
+
+[oslo_policy]
+
+[paste_deploy]
+flavor = keystone
+
+[profiler]

@@ -1,0 +1,122 @@
+---
+- hosts: controller
+  vars:
+    playbook: glance-setup
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: /root
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
+  tasks:
+
+# Prep
+    - name: Ansible Directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ bupdir }}"
+        - "{{ progdir }}"
+        - "{{ ansdir }}/img"
+    - name: Networking
+      firewalld:
+        port: "{{ item }}"
+        state: enabled
+        immediate: True
+        permanent: True
+      loop:
+        - '9191/tcp'
+        - '9191/udp'
+        - '9292/tcp'
+        - '9292/udp'
+
+# Glance DB
+    - name: Glance Database
+      mysql_db:
+        name: glance
+    - name: Glance DB User
+      mysql_user:
+        name: glance
+        password: glance
+        priv: "glance.*:ALL"
+        host: "{{ item }}"
+      loop:
+        - localhost
+        - '192.168.124.%'
+
+# OpenStack Config
+    - name: OpenStack Service Config
+      shell: "source {{ home }}/.openrc.admin; {{ item }}"
+      loop:
+        - '/bin/openstack user create --domain default --password glance glance'
+        - '/bin/openstack role add --project service --user glance admin'
+        - '/bin/openstack service create --name glance --description "OpenStack Image" image'
+        - '/bin/openstack endpoint create --region RegionOne image public http://{{ fqdn }}:9292'
+        - '/bin/openstack endpoint create --region RegionOne image internal http://{{ fqdn }}:9292'
+        - '/bin/openstack endpoint create --region RegionOne image admin http://{{ fqdn }}:9292'
+        - 'touch {{ progfile }}.os'
+      args:
+        creates: "{{ progfile }}.os" 
+
+# Service Install/Config
+    - name: Install Services
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - openstack-glance
+    - name: Backup Files
+      shell: "cp -av {{ files|join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/glance/glance-api.conf
+        - /etc/glance/glance-registry.conf
+        - /etc/glance/glance-swift.conf
+      args:
+        creates: "{{ bupdir }}/glance-api.conf"
+    - name: Upload Glance Config
+      template:
+        src: "../Templates/etc/{{ item }}.j2"
+        dest: "/etc/glance/{{ item }}"
+        owner: root
+        group: glance
+        mode: 0640
+      loop:
+        - glance-api.conf
+        - glance-registry.conf
+        - glance-swift.conf
+      register: glance
+    - name: Populate Glance DB
+      shell: 'su -s /bin/sh -c "glance-manage db_sync" glance && touch {{ progfile }}.sql'
+      args:
+        creates: "{{ progfile }}.sql"
+    - name: Start Services
+      service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: True
+      loop:
+        - openstack-glance-api
+        - openstack-glance-registry
+      when: glance.changed == True
+
+# Verify Operation
+    - name: Download Image
+      uri:
+        url: http://download.cirros-cloud.net/0.4.0/cirros-0.4.0-x86_64-disk.img
+        dest: "{{ ansdir }}/img/cirros-0.4.0-x86_64-disk.img"
+      register: wget
+      failed_when: wget.status != 200 and wget.status != 304
+    - name: Verify Operation
+      shell: 'source {{ home }}/.openrc.admin; {{ item }}'
+      loop:
+        - '/bin/openstack image create "cirros" --file {{ ansdir }}/img/cirros-0.4.0-x86_64-disk.img --disk-format qcow2 --container-format bare --public'
+        - '/bin/openstack image list'
+        - 'touch {{ progfile }}.img'
+      args:
+        creates: "{{ progfile }}.img"
