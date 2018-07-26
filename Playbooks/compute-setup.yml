@@ -1,18 +1,28 @@
 ---
-- hosts: compute
+- name: Compute Setup
+  hosts: compute
   vars:
     playbook: compute-setup
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
     user: "apollo"
     home: "/home/apollo"
     suhome: "/root"
     ansdir: "{{ home }}/.ansible"
     bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
+    ctrl: "ctrl.centos.rdo"
+
   tasks:
 # Backup Files
-    - name: Backup Directory
+    - name: Ansible Directories
       file:
-        path: "{{ bupdir }}"
+        path: "{{ item }}"
         state: directory
+      loop:
+        - "{{ bupdir }}"
+        - "{{ progdir }}"
     - name: Backup Files
       shell: "cp -av {{ files | join(' ') }} {{ bupdir }}"
       vars:
@@ -28,10 +38,6 @@
         password: "$6$rounds=656000$nPHWBkVpu83jqyMe$vqmnOkNZcS.kQTNfhjDA6lWtiRIRodQVj7ky9ARuE0jKeR01.d0dI.FHFbXj4iG3/KjFInf9yhve1CgvKPEJA0"
 
 # System Config
-#   Moved to template-setup
-#    - name: Update Hostname
-#      hostname:
-#        name: comp.centos.rdo
     - name: Update chrony.conf (ntpd)
       template:
         dest: /etc/chrony.conf
@@ -42,3 +48,32 @@
         name: chronyd
         state: restarted
       when: chrony.changed == True
+
+# OpenStack Install/Config
+    - name: Install OpenStack Compute
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - openstack-nova-compute
+    - name: Upload Nova Config
+      template:
+        src: '../Templates/etc/nova.conf.comp.j2'
+        dest: '/etc/nova/nova.conf'
+      register: nova
+    - name: Start Nova
+      service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: True
+      loop:
+        - 'libvirtd'
+        - 'openstack-nova-compute'
+      when: nova.changed == True 
+    - name: Instantiate Nova
+      shell: "source {{ home }}/.openrc.admin; {{ item }}"
+      loop:
+        - '/bin/openstack compute service list --service nova-compute'
+        - 'su -s /bin/sh -c "nova-manage cell_v2 discover_hosts --verbose" nova'
+      delegate_to: controller

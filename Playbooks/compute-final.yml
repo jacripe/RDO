@@ -1,0 +1,39 @@
+---
+- name: Finalize Compute
+  hosts: controller
+  vars:
+    playbook: compute-final
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: /root
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
+
+  tasks:
+# Prep
+    - name: Ansible Directories
+      file:
+        path: "{{ files }}"
+        state: directory
+      vars:
+        files:
+        - "{{ bupdir }}"
+        - "{{ progdir }}"
+
+# Verify Compute
+    - name: Verify Compute
+      shell: "source {{ home }}/.openrc.admin; {{ item }}"
+      loop:
+        - '/bin/openstack compute service list'
+        - '/bin/openstack catalog list'
+        - '/bin/openstack image list'
+        - '/bin/nova-status upgrade check'
+        - 'touch {{ progfile }}'
+      args:
+        creates: "{{ progfile }}"
+      register: nova
+      failed_when: nova.rc != 0 and nova.rc != 2

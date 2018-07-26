@@ -1,11 +1,14 @@
 ---
-- hosts: all
+- name: Template Setup
+  hosts: all
   vars:
     playbook: template-setup
     user: apollo
     home: /home/apollo
     ansdir: "{{ home }}/.ansible"
     bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
   tasks:
 # Validate Variables
     - name: Debug User / Home
@@ -13,14 +16,13 @@
         msg: "USER: {{ user }}; HOME: {{ home }}; ANSDIR: {{ ansdir }}; BUPDIR: {{ bupdir }}"
 
 # Prep
-    - name: Progress Directory
+    - name: Ansible Directories
       file:
-        path: "{{ ansdir }}/progress"
+        path: "{{ item }}"
         state: directory
-    - name: Backup Directory
-      file:
-        path: "{{ bupdir }}"
-        state: directory
+      loop:
+        - "{{ bupdir }}"
+        - "{{ progdir }}"
     - name: Backup Files
       shell: "cp -av {{ files | join(' ') }} {{ bupdir }}"
       vars:
@@ -62,6 +64,7 @@
         # Network
         - nmap
         - wget
+        - sysstat
         - tcpdump
         - net-tools
         - bind-utils
@@ -72,6 +75,8 @@
         - strace
         - mlocate
         - yum-utils
+        #- libvirt-daemon
+        #- libvirt-client
         - bash-completion
         - yum-plugin-versionlock
         # Misc
@@ -98,11 +103,14 @@
         regexp: '^\s*%wheel\s.*'
         line: "%wheel ALL=(ALL) NOPASSWD: ALL"
         validate: '/sbin/visudo -c -f %s'
-    - name: Start/Enable chronyd
+    - name: Start Services
       service:
-        name: chronyd
+        name: "{{ item }}"
         state: started
         enabled: yes
+      loop:
+        - chronyd
+        #- libvirt-guests
 
 # Networking
     - name: Update hostname
@@ -112,6 +120,11 @@
       copy:
         src: ../Templates/etc/hosts
         dest: /etc/hosts
+    #- name: Disable IPv6
+    #  sysctl:
+    #    name: net.ipv6.conf.all.disable_ipv6
+    #    value: 1
+    #    sysctl_set: yes
     - name: Verify Networking
       script: ../Templates/bin/envping.sh
 
@@ -134,6 +147,6 @@
 
 # Touch Progress File
     - name: Progress File
-      shell: "touch {{ ansdir }}/progress/{{ playbook }}"
+      shell: "touch {{ progfile }}"
       args:
-        creates: "{{ ansdir }}/progress/template"
+        creates: "{{ progfile }}"

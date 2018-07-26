@@ -1,7 +1,10 @@
 ---
-- hosts: controller
+- name: Keystone Setup
+  hosts: controller
   vars:
     playbook: keystone-setup 
+    fqdn: "{{ ansible_fqdn }}"
+    hostname: controller
     home: /home/apollo
     user: apollo
     suhome: /root
@@ -52,6 +55,20 @@
         permanent: True
       loop:
         - http
+    - name: Update Firewall Ports
+      firewalld:
+        port: "{{ item.0 }}/{{ item.1 }}"
+        state: enabled
+        immediate: True
+        permanent: True
+      loop: "{{ ports|product(proto)|list }}"
+      vars:
+        ports:
+        - '5000'
+        - '35357'
+        proto:
+        - 'tcp'
+        - 'udp'
 
 # Misc.
     - name: Upload OpenRC Files
@@ -112,4 +129,4 @@
         - "/bin/keystone-manage bootstrap --bootstrap-password openstack --bootstrap-admin-url http://{{ ansible_fqdn }}:5000/v3/ --bootstrap-internal-url http://{{ ansible_fqdn }}:5000/v3/ --bootstrap-public-url http://{{ ansible_fqdn }}:5000/v3/ --bootstrap-region-id RegionOne"
         - "touch {{ ansdir }}/progress/{{ playbook }}"
       args:
-        creates: "{{ ansdir }}/progress/keystone"
+        creates: "{{ ansdir }}/progress/{{ playbook }}"

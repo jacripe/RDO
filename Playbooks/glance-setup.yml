@@ -1,5 +1,6 @@
 ---
-- hosts: controller
+- name: Glance Setup
+  hosts: controller
   vars:
     playbook: glance-setup
     fqdn: "{{ ansible_fqdn }}"

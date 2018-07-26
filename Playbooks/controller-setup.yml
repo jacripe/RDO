@@ -1,5 +1,6 @@
 ---
-- hosts: controller
+- name: Controller Setup
+  hosts: controller
   vars:
     playbook: controller-setup
     user: "apollo"
@@ -89,6 +90,7 @@
     - name: Check yum versionlock
       shell: "grep erlang /etc/yum/pluginconf.d/versionlock.list"
       register: verslock
+      ignore_errors: yes
     - name: Version Lock Packages
       shell: "yum versionlock {{ item }}"
       loop:

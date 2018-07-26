@@ -1,0 +1,153 @@
+---
+- name: Compute Controller
+  hosts: controller
+  vars:
+    playbook: "compute-controller"
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: "/root"
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
+
+    # Services included in memory management
+    ramhogs:
+      - mariadb
+      - httpd
+      # Let's keep this enabled for now...
+      # - firewalld
+      - openstack-glance-api
+      - openstack-glance-registry
+      - openstack-swift-proxy
+  tasks:
+
+# Prep
+    - name: Ansible Directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ bupdir }}"
+        - "{{ progdir }}"
+    - name: Update Firewall Ports
+      firewalld:
+        port: '{{ item.0 }}/{{ item.1 }}'
+        state: enabled
+        immediate: True
+        permanent: True
+      loop: "{{ ports|product(proto)|list }}"
+      vars:
+        ports:
+        - '6080'
+        - '8774-8778'
+        proto:
+        - 'tcp'
+        - 'udp'
+
+# Database Config
+    - name: Create Nova DBs
+      mysql_db:
+        name: "{{ item }}"
+      loop:
+        - nova_api
+        - nova
+        - nova_cell0
+    - name: Create Nova DB User
+      mysql_user:
+        name: nova
+        password: nova
+        host: "{{ item }}"
+        priv: "nova.*:ALL/nova_api.*:ALL/nova_cell0.*:ALL"
+      loop:
+        - "localhost"
+        - "192.168.124.%"
+
+# OpenStack Service Config
+    - name: Configure OpenStack Service
+      shell: "source {{ home }}/.openrc.admin; {{ item }}"
+      loop:
+        - '/bin/openstack user create --domain default --password nova nova'
+        - '/bin/openstack role add --project service --user nova admin'
+        - '/bin/openstack service create --name nova --description "OpenStack Compute" compute'
+        - '/bin/openstack endpoint create --region RegionOne compute public http://{{ fqdn }}:8774/v2.1'
+        - '/bin/openstack endpoint create --region RegionOne compute internal http://{{ fqdn }}:8774/v2.1'
+        - '/bin/openstack endpoint create --region RegionOne compute admin http://{{ fqdn }}:8774/v2.1'
+        - '/bin/openstack user create --domain default --password placement placement'
+        - '/bin/openstack role add --project service --user placement admin'
+        - '/bin/openstack service create --name placement --description "Placement API" placement'
+        - '/bin/openstack endpoint create --region RegionOne placement public http://{{ fqdn }}:8778'
+        - '/bin/openstack endpoint create --region RegionOne placement internal http://{{ fqdn }}:8778'
+        - '/bin/openstack endpoint create --region RegionOne placement admin http://{{ fqdn }}:8778'
+        - 'touch {{ progfile }}.os'
+      args:
+        creates: "{{ progfile }}.os"
+
+# Service Install/Config
+    - name: Stop Services
+      service:
+       name: "{{ item }}"
+       state: stopped 
+      loop: "{{ ramhogs }}"
+    - name: Install Packages
+      yum:
+        # NOTE: Ran into memory error when installing collectively
+        name: "{{ packages }}"
+        state: latest
+      loop:
+      vars:
+        packages:
+        - 'openstack-nova-api'
+        - 'openstack-nova-conductor'
+        - 'openstack-nova-console'
+        - 'openstack-nova-novncproxy'
+        - 'openstack-nova-scheduler'
+        - 'openstack-nova-placement-api'
+    - name: Start Services
+      service:
+        name: "{{ item }}"
+        state: started
+      loop: "{{ ramhogs }}"
+    - name: Upload Configs
+      template:
+        src: "../Templates/etc/{{ item.name }}.j2"
+        dest: "{{ item.path }}/{{ item.name }}"
+      loop:
+        - { name: 'nova.conf', path: '/etc/nova' }
+        - { name: '00-nova-placement-api.conf', path: '/etc/httpd/conf.d' }
+      register: config
+    - name: Restart Services
+      service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: True
+      loop:
+        - httpd
+      when: config.changed == True
+
+# Nova Init
+    - name: Initialize Nova
+      shell: "{{ item }}"
+      loop:
+        - 'su -s /bin/sh -c "nova-manage api_db sync" nova'
+        - 'su -s /bin/sh -c "nova-manage cell_v2 map_cell0" nova'
+        - 'su -s /bin/sh -c "nova-manage cell_v2 create_cell --name=cell1 --verbose" nova'
+        - 'su -s /bin/sh -c "nova-manage db sync" nova'
+        - 'nova-manage cell_v2 list_cells'
+        - 'touch {{ progfile }}.nova'
+      args:
+        creates: "{{ progfile }}.nova"
+    - name: Start Nova Services
+      service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: True
+      loop:
+        - 'openstack-nova-api'
+        - 'openstack-nova-consoleauth'
+        - 'openstack-nova-scheduler'
+        - 'openstack-nova-conductor'
+        - 'openstack-nova-novncproxy'
+      when: config.changed == True

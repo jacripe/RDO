@@ -1,0 +1,13 @@
+---
+- import_playbook: template-setup.yml
+- import_playbook: controller-setup.yml
+- import_playbook: keystone-setup.yml
+- import_playbook: user-setup.yml
+- import_playbook: swift-controller.yml
+- import_playbook: swift-setup.yml
+- import_playbook: swift-rings.yml
+- import_playbook: swift-final.yml
+- import_playbook: glance-setup.yml
+- import_playbook: compute-controller.yml
+- import_playbook: compute-setup.yml
+- import_playbook: compute-final.yml

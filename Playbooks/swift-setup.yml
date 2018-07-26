@@ -1,5 +1,6 @@
 ---
-- hosts: object
+- name: Swift Setup
+  hosts: object
   vars:
     playbook: swift-setup
     fqdn: "{{ ansible_fqdn }}"

@@ -1,5 +1,6 @@
 ---
-- hosts: controller,object
+- name: Swift Final
+  hosts: controller,object
   vars:
     playbook: swift-final
     fqdn: "{{ ansible_fqdn }}"

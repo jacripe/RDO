@@ -1,5 +1,6 @@
 ---
-- hosts: controller
+- name: Swift Rings
+  hosts: controller
   vars:
     playbook: swift-rings
     fqdn: "{{ ansible_fqdn }}"

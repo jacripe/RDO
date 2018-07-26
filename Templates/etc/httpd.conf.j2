@@ -1,4 +1,5 @@
+ServerName {{ fqdn }}
 <VirtualHost *:80>
-    ServerName controller
-    ServerAlias ctrl.centos.rdo localhost
+    ServerName {{ hostname }}
+    ServerAlias {{ fqdn }} localhost
 </VirtualHost>
