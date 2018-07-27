@@ -1,0 +1,10 @@
+# Templated out from
+# https://docs.openstack.org/neutron/queens/install/controller-install-option2-rdo.html
+[DEFAULT]
+interface_driver = linuxbridge
+dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq
+enabled_isolated_metadate = true
+
+[agent]
+
+[ovs]

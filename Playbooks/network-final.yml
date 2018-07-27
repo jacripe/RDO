@@ -1,0 +1,30 @@
+---
+- name: Finalize Networking
+  hosts: controller
+  vars:
+    playbook: network-final
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: /root
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
+  tasks:
+# Prep
+    - name: Ansible Directories
+      file:
+        name: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ bupdir }}"
+        - "{{ progdir }}"
+
+# Verify Operation
+    - name: Verify Operation
+      shell: "source {{ home }}/.openrc.admin; {{ item }}"
+      loop:
+        - '/bin/openstack extension list --network'
+        - '/bin/openstack network agent list'

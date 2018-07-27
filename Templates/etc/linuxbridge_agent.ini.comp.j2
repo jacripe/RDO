@@ -1,0 +1,19 @@
+# Templated out from
+# https://docs.openstack.org/neutron/queens/install/compute-install-option2-rdo.html
+[DEFAULT]
+
+[agent]
+
+[linux_bridge]
+physical_interface_mappings = provider:eth1
+
+[network_log]
+
+[securitygroup]
+enable_security_group = true
+firewall_driver = neutron.agent.linux.iptables_firewall.IptablesFirewallDriver
+
+[vxlan]
+enable_vxlan = true
+local_ip = {{ ipaddr }}
+l2_population = true

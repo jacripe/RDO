@@ -76,6 +76,17 @@ password = nova
 [mks]
 
 [neutron]
+url = http://{{ fqdn }}:9696
+auth_url = http://{{ fqdn }}:35357
+auth_type = password
+project_domain_name = default
+user_domain_name = default
+region_name = RegionOne
+project_name = service
+username = neutron
+password = neutron
+service_metadata_proxy = true
+metadata_proxy_shared_secret = neutron
 
 [notifications]
 

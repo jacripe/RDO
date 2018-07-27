@@ -1,0 +1,57 @@
+---
+- name: Dashboard Controller
+  hosts: controller
+  vars:
+    playbook: dashboard-controller
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: /root
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
+  tasks:
+# Prep
+    - name: Ansible Directories
+      file:
+        name: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ bupdir }}"
+        - "{{ progdir }}"
+
+# Service Install/Config
+    - name: Install Service
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - openstack-dashboard
+    - name: Backup Files
+      shell: "cp -av {{ files|join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/openstack-dashboard/local_settings
+        - /etc/httpd/conf.d/openstack-dashboard.conf
+      args:
+        creates: "{{ bupdir }}/local_settings"
+    - name: Upload Config
+      template:
+        src: "../Templates/etc/{{ item.src }}"
+        dest: "{{ item.dest }}"
+      loop:
+        - { src: 'local_settings.j2', dest: '/etc/openstack-dashboard/local_settings' }
+        - { src: 'openstack-dashboard.conf.j2', dest: '/etc/httpd/conf.d/openstack-dashboard.conf' }
+      register: conf
+    - name: Restart Services
+      service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: True
+      loop:
+        - httpd
+        - memcached
+      when: conf.changed == True

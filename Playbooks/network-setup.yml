@@ -1,0 +1,74 @@
+---
+- name: Network Setup
+  hosts: compute
+  vars:
+    playbook: network-setup
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    ctrl: ctrl.centos.rdo
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: /root
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
+
+  tasks:
+# Prep
+    - name: Ansible Directories
+      file:
+        name: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ bupdir }}"
+        - "{{ progdir }}"
+    
+# Service Install/Config
+    - name: Install Service
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - openstack-neutron-linuxbridge
+        - ebtables
+        - ipset
+    - name: Load Kernel Module
+      modprobe:
+        name: br_netfilter
+    - name: Kernel Config
+      sysctl:
+        name: "{{ item }}"
+        value: 1
+        sysctl_set: yes
+      loop:
+        - net.bridge.bridge-nf-call-iptables
+        - net.bridge.bridge-nf-call-ip6tables
+    - name: Backup Files
+      shell: "cp -av {{ files|join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/neutron/neutron.conf
+        - /etc/neutron/plugins/ml2/linuxbridge_agent.ini
+        - /etc/nova/nova.conf
+      args:
+        creates: "{{ bupdir }}/neutron.conf"
+    - name: Service Config
+      template:
+        src: "../Templates/etc/{{ item.src }}"
+        dest: "{{ item.dest }}"
+      loop:
+        - { src: 'neutron.conf.comp.j2', dest: '/etc/neutron/neutron.conf' }
+        - { src: 'linuxbridge_agent.ini.comp.j2', dest: '/etc/neutron/plugins/ml2/linuxbridge_agent.ini' }
+        - { src: 'nova.conf.comp.j2', dest: '/etc/nova/nova.conf' }
+      register: conf
+    - name: ReStart Services
+      service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: True
+      loop:
+        - openstack-nova-compute
+        - neutron-linuxbridge-agent
+      when: conf.changed == True
