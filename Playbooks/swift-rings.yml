@@ -24,15 +24,14 @@
         - "{{ progdir }}"
 
 # Networking
-    - name: Update Firewall Ports
-      firewalld:
-        port: "{{ item }}"
-        state: enabled
-        immediate: True
-        permanent: True
-      loop:
-        - '6200-6202/tcp'
-        - '6200-6202/udp'
+    - name: IPTables
+      iptables:
+        chain: INPUT
+        jump: ACCEPT
+        protocol: tcp
+        destination_port: 6200:6202
+    - name: Save IPTables
+      shell: "service iptables save"
 
 # Swift Account Ring
     - name: Create account.builder File

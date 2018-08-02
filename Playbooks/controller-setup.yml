@@ -9,8 +9,8 @@
     ansdir: "{{ home }}/.ansible"
     bupdir: "{{ ansdir }}/bak/{{ playbook }}"
   tasks:
-# Backup Files
-    - name: Backup Directory
+# Prep
+    - name: Ansible Directories
       file:
         path: "{{ bupdir }}"
         state: directory
@@ -29,43 +29,38 @@
         password: "$6$rounds=656000$6E9Tq9lnQHnz.A06$g/7vFnchshxeYY0OdZMeZkLyKewv1O6HaIvpBj52zOtOjq9nXfiTAWgg/L8tg0e2ZZhNj8G7i8WCVigfaFXXm0"
 
 # Networking
-#    Moved to template-setup
-#    - name: Update Hostname
-#      hostname:
-#        name: ctrl.centos.rdo
-    - name: Firewall Services
-      firewalld:
-        service: "{{ item }}"
-        state: enabled
-        immediate: True
-        permanent: True
+    - name: IPTables TCP
+      iptables:
+        chain: INPUT
+        destination_port: "{{ item }}"
+        protocol: tcp
+        jump: ACCEPT
       loop:
-        - ntp
-        - mysql
-    - name: Firewall TCP Ports
-      firewalld:
-        port: "{{ item }}/tcp"
-        state: enabled
-        immediate: True
-        permanent: True
-      loop:
+        # HTTPd
+        - 80
+        # MySQL
+        - 3306
         # RabbitMQ
         - 4369
-        - 5671-5672
+        - 5671:5672
         - 25672
+        # EtcD
+        - 2379:2380
         # MemCacheD
         - 11211
-        # Etcd
-        - 2379-2380
-    - name: Firewall UDP Ports
-      firewalld:
-        port: "{{ item }}/udp"
-        state: enabled
-        immediate: True
-        permanent: True
+    - name: IPTables UDP
+      iptables:
+        chain: INPUT
+        destination_port: "{{ item }}"
+        protocol: udp
+        jump: ACCEPT
       loop:
+        # NTP
+        - 123
         # MemCacheD
         - 11211
+    - name: Save IPTables
+      shell: "service iptables save"
 
 # Service Install/Config
     - name: Install Services
@@ -107,9 +102,6 @@
         name: mariadb
         state: restarted
         enabled: True
-# Still working this one out...
-#    - name: MySQL Secure Installation
-#      shell: "mysql_secure_installation"
     - name: Remove MySQL Default User
       mysql_user:
         name: ""

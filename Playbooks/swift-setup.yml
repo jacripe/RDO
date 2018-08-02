@@ -28,33 +28,23 @@
         - /etc/sysconfig/network
       args:
         creates: "{{ bupdir }}/hosts"
-#    Moved to template-setup
-#    - name: Set Hostname
-#      hostname:
-#        name: "{{ fqdn }}"
     - name: Set root Password
       user:
         name: root
         password: '$6$rounds=656000$mk0s9/5d0BQAQ4f6$KM/uo3ZWBOKDMDA.BO0IqK/QbrYA1uFECJgCILPi1hQx80Yl.CVqdfe.ieP1lKksaMRqJ2CYAdO5w99m.rw/t.'
 
 # Network Config
-    - name: Update Firewall Services
-      firewalld:
-        service: "{{ item }}"
-        state: enabled
-        immediate: True
-        permanent: True
+    - name: IPTables
+      iptables:
+        chain: INPUT
+        jump: ACCEPT
+        protocol: "{{ item }}"
+        destination_port: 873
       loop:
-        - rsyncd
-    - name: Update Firewall Ports
-      firewalld:
-        port: "{{ item }}"
-        state: enabled
-        immediate: True
-        permanent: True
-      loop:
-        - '6200-6202/tcp'
-        - '6200-6202/udp'
+        - tcp
+        - udp
+    - name: Save IPTables
+      shell: "service iptables save"
 
 # Install Packages
     - name: Install Packages

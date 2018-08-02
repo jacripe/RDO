@@ -3,6 +3,10 @@
   hosts: all
   vars:
     playbook: template-setup
+    fqdn: "{{ inventory_hostname }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    iface: "{{ ansible_default_ipv4.interface }}" 
+    mac: "{{ ansible_default_ipv4.macaddress }}"
     user: apollo
     home: /home/apollo
     ansdir: "{{ home }}/.ansible"
@@ -23,16 +27,11 @@
       loop:
         - "{{ bupdir }}"
         - "{{ progdir }}"
-    - name: Backup Files
-      shell: "cp -av {{ files | join(' ') }} {{ bupdir }}"
-      vars:
-        files:
-        - /etc/hosts
-        - /etc/sudoers
-        - /etc/ssh/sshd_config
-        - /etc/chrony.conf
-      args:
-        creates: "{{ bupdir }}/hosts"
+    - name: Kernel Config
+      sysctl:
+        name: vm.swappiness
+        value: 90
+        sysctl_set: True
 
 # User Config
     - name: User .ssh Directory
@@ -53,6 +52,10 @@
         - { dst: "id_rsa", src: "apollo_rsa" }
         - { dst: "id_rsa.pub", src: "apollo_rsa.pub" }
         - { dst: "authorized_keys", src: "authorized_keys" }
+    - name: Root User
+      user:
+        name: root
+        password: '$6$rounds=656000$i5EJmxBSz5L3J4B7$LkNQqmxS5oCWlYRGS8K4u4WYTlvtxAPipbUSTvDHKoAIRLnyUkrj1//ByVqIuzSacJBKoR9/ksSWdrAQkgoRc/'
 
 # Packages
     - name: Required Packages
@@ -81,6 +84,16 @@
         - yum-plugin-versionlock
         # Misc
         - vim
+    - name: Backup Files
+      shell: "cp -av {{ files | join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/hosts
+        - /etc/sudoers
+        - /etc/ssh/sshd_config
+        - /etc/chrony.conf
+      args:
+        creates: "{{ bupdir }}/hosts"
 
 # Service Config
     - name: Update sshd_config
@@ -120,13 +133,25 @@
       copy:
         src: ../Templates/etc/hosts
         dest: /etc/hosts
+    - name: Disable NetworkManager & Firewalld
+      service:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - NetworkManager
+        - firewalld
+    - name: Upload ifcfg
+      template:
+        src: "../Templates/etc/ifcfg-pri.j2"
+        dest: "/etc/sysconfig/network-scripts/ifcfg-{{ iface }}"
     #- name: Disable IPv6
     #  sysctl:
     #    name: net.ipv6.conf.all.disable_ipv6
     #    value: 1
     #    sysctl_set: yes
-    - name: Verify Networking
-      script: ../Templates/bin/envping.sh
+    #- name: Verify Networking
+    #  script: ../Templates/bin/envping.sh
 
 # OpenStack Packages
     - name: RDO Queens (OSP13) Repository Package

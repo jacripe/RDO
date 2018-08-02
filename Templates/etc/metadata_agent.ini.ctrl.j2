@@ -1,0 +1,9 @@
+# Templated out from
+# https://docs.openstack.org/neutron/queens/install/controller-install-rdo.html
+[DEFAULT]
+nova-metadata_host = {{ fqdn }}
+metadata_proxy_shared_secret = neutron
+
+[agent]
+
+[cache]

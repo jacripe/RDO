@@ -23,17 +23,17 @@
         - "{{ bupdir }}"
         - "{{ progdir }}"
         - "{{ ansdir }}/img"
-    - name: Networking
-      firewalld:
-        port: "{{ item }}"
-        state: enabled
-        immediate: True
-        permanent: True
+    - name: IPTables
+      iptables:
+        chain: INPUT
+        jump: ACCEPT
+        protocol: tcp
+        destination_port: "{{ item }}"
       loop:
-        - '9191/tcp'
-        - '9191/udp'
-        - '9292/tcp'
-        - '9292/udp'
+        - 9191
+        - 9292
+    - name: Save IPTables
+      shell: "service iptables save"
 
 # Glance DB
     - name: Glance Database

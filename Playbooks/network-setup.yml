@@ -5,6 +5,7 @@
     playbook: network-setup
     fqdn: "{{ ansible_fqdn }}"
     ipaddr: "{{ ansible_default_ipv4.address }}"
+    mac: "{{ ansible_eth1.macaddress }}"
     ctrl: ctrl.centos.rdo
     user: apollo
     home: "/home/{{ user }}"
@@ -23,6 +24,10 @@
       loop:
         - "{{ bupdir }}"
         - "{{ progdir }}"
+    - name: Upload eth1 Config
+      template:
+        src: ../Templates/etc/ifcfg-eth1.j2
+        dest: /etc/sysconfig/network-scripts/ifcfg-eth1
     
 # Service Install/Config
     - name: Install Service

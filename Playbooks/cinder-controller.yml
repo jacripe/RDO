@@ -1,0 +1,106 @@
+---
+- name: Cinder Controller
+  hosts: controller
+  vars:
+    playbook: cinder-controller
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: /root
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
+
+  tasks:
+# Prep
+    - name: Ansible Directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ bupdir }}"
+        - "{{ progdir }}"
+    - name: IPTables
+      iptables:
+        chain: INPUT
+        jump: ACCEPT
+        protocol: tcp
+        destination_port: 8776
+    - name: Save IPTables
+      shell: "service iptables save"
+
+# MySQL
+    - name: Cinder DB
+      mysql_db:
+        name: cinder
+    - name: Cinder DB User
+      mysql_user:
+        name: cinder
+        password: cinder
+        priv: 'cinder.*:ALL'
+        host: "{{ item }}"
+        state: present
+      loop:
+        - "localhost"
+        - "192.168.124.%"
+
+# OpenStack Config
+    - name: OpenStack Config
+      shell: "source {{ home }}/.openrc.admin; {{ item }}"
+      loop:
+        - '/bin/openstack user create --domain default --password cinder cinder'
+        - '/bin/openstack role add --project service --user cinder admin'
+        - '/bin/openstack service create --name cinderv2 --description "OS Block Storage v2" volumev2'
+        - '/bin/openstack service create --name cinderv3 --description "OS Block Storage v3" volumev3'
+        - '/bin/openstack endpoint create --region RegionOne volumev2 public http://{{ fqdn }}:8776/v2/%\(project_id\)s'
+        - '/bin/openstack endpoint create --region RegionOne volumev2 internal http://{{ fqdn }}:8776/v2/%\(project_id\)s'
+        - '/bin/openstack endpoint create --region RegionOne volumev2 admin http://{{ fqdn }}:8776/v2/%\(project_id\)s'
+        - '/bin/openstack endpoint create --region RegionOne volumev3 public http://{{ fqdn }}:8776/v3/%\(project_id\)s'
+        - '/bin/openstack endpoint create --region RegionOne volumev3 internal http://{{ fqdn }}:8776/v3/%\(project_id\)s'
+        - '/bin/openstack endpoint create --region RegionOne volumev3 admin http://{{ fqdn }}:8776/v3/%\(project_id\)s'
+        - 'touch {{ progfile }}.os'
+      args:
+        creates: "{{ progfile }}.os"
+
+# Cinder Install/Config
+    - name: Cinder Install
+      yum:
+        name: openstack-cinder
+        state: latest
+    - name: Backup Files
+      shell: "cp -av {{ files|join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/cinder/cinder.conf
+        - /etc/nova/nova.conf
+      args:
+        creates: "{{ bupdir }}/cinder.conf"
+    - name: Cinder Config
+      template:
+        src: "../Templates/etc/{{ item.src }}"
+        dest: "{{ item.dest }}"
+      loop:
+        - { src: cinder.conf.ctrl.j2, dest: /etc/cinder/cinder.conf }
+        - { src: nova.conf.ctrl.j2, dest: /etc/nova/nova.conf }
+      register: conf
+
+# Service Init
+    - name: Cinder DB Sync
+      shell: "{{ item }}"
+      loop:
+        - 'su -s /bin/sh -c "cinder-manage db sync" cinder'
+        - 'touch {{ progfile }}.dbsync'
+      args:
+        creates: "{{ progfile }}.dbsync"
+    - name: ReStart Services
+      service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: True
+      loop:
+        - openstack-nova-api
+        - openstack-cinder-api
+        - openstack-cinder-scheduler
+      when: conf.changed == True

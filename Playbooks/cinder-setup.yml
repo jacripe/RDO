@@ -1,0 +1,100 @@
+---
+- name: Cinder Setup
+  hosts: block
+  vars:
+    playbook: cinder-setup
+    fqdn: "{{ ansible_fqdn }}"
+    ipaddr: "{{ ansible_default_ipv4.address }}"
+    ctrl: ctrl.centos.rdo
+    user: apollo
+    home: "/home/{{ user }}"
+    suhome: /root
+    ansdir: "{{ home }}/.ansible"
+    bupdir: "{{ ansdir }}/bak/{{ playbook }}"
+    progdir: "{{ ansdir }}/progress"
+    progfile: "{{ progdir }}/{{ playbook }}"
+
+  tasks:
+# Prep
+    - name: Ansible Directories
+      file:
+        path: "{{ item }}"
+        state: directory
+      loop:
+        - "{{ bupdir }}"
+        - "{{ progdir }}"
+    - name: IPTables
+      iptables:
+        chain: INPUT
+        jump: ACCEPT
+        protocol: tcp
+        destination_port: 9292
+    - name: Save IPTables
+      shell: "service iptables save"
+
+# LVM
+    - name: LVM Install/Config
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - lvm2
+        - device-mapper-persistent-data
+    - name: Start LVM
+      service:
+        name: lvm2-lvmetad
+        state: started
+        enabled: True
+    - name: LVM PV/VG
+      lvg:
+        vg: cinder-volumes
+        pvs: /dev/vdb
+    - name: Backup Files
+      shell: "cp -av {{ files|join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/lvm/lvm.conf
+      args:
+        creates: "{{ bupdir }}/lvm.conf"
+    - name: LVM Config
+      lineinfile:
+        path: /etc/lvm/lvm.conf
+        regexp: '^(\s*)#?\s*filter =.*'
+        line: '\1filter = [ "a/vda/", "a/vdb/", "r/.*/" ]'
+        backrefs: True
+
+# Cinder Install/Config
+    - name: Install Cinder
+      yum:
+        name: "{{ packages }}"
+        state: latest
+      vars:
+        packages:
+        - openstack-cinder
+        - targetcli
+        - python-keystone
+    - name: Backup Files
+      shell: "cp -av {{ files|join(' ') }} {{ bupdir }}"
+      vars:
+        files:
+        - /etc/cinder/cinder.conf
+    - name: Upload Config
+      template: 
+        src: ../Templates/etc/cinder.conf.blk.j2
+        dest: /etc/cinder/cinder.conf
+      register: conf
+    - name: Start Services
+      service:
+        name: "{{ item }}"
+        state: restarted
+        enabled: True
+      loop:
+        - openstack-cinder-volume
+        - target
+      when: conf.changed == True
+
+# Verify
+    - name: Verify Service
+      shell: "source {{ home }}/.openrc.admin; /bin/openstack volume service list"
+      delegate_to: controller
